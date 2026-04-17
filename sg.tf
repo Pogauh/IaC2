@@ -1,6 +1,6 @@
 # Create a security group for the EC2 instance
 resource "aws_security_group" "web" {
-  name        = "nginx-sg"
+  name_prefix = "nginx-sg-"
   description = "Allow web and SSH traffic"
 
   ingress {
@@ -15,7 +15,7 @@ resource "aws_security_group" "web" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.ssh_allowed_cidrs
     description = "Allow SSH traffic"
   }
 

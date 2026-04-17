@@ -2,25 +2,44 @@ resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
-# Create an S3 bucket
 resource "aws_s3_bucket" "demo_bucket" {
-  bucket        = "${var.bucket_name_prefix}-${random_id.bucket_suffix.hex}"
-  force_destroy = true
+  bucket = "my-bucket-${random_id.bucket_suffix.hex}"
 }
 
-# Enable versioning for the bucket
-resource "aws_s3_bucket_versioning" "demo_bucket_versioning" {
+# Allow public read access to the bucket
+resource "aws_s3_bucket_public_access_block" "demo_bucket_pab" {
   bucket = aws_s3_bucket.demo_bucket.id
 
-  versioning_configuration {
-    status = "Enabled"
-  }
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
 }
 
-# Upload a file to the bucket
+# Bucket policy to allow public read access
+resource "aws_s3_bucket_policy" "demo_bucket_policy" {
+  bucket = aws_s3_bucket.demo_bucket.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "PublicReadGetObject"
+        Effect = "Allow"
+        Principal = "*"
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.demo_bucket.arn}/*"
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.demo_bucket_pab]
+}
+
 resource "aws_s3_object" "demo_object" {
-  bucket = aws_s3_bucket.demo_bucket.id
-  key    = "hello-world.txt"
-  source = "${path.module}/test-file.txt"
-  etag   = filemd5("${path.module}/test-file.txt")
+  bucket       = aws_s3_bucket.demo_bucket.id
+  key          = "test-file.txt"
+  source       = "${path.module}/test-file.txt"
+  content_type = "text/plain"
 }
+

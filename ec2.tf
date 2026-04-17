@@ -4,11 +4,16 @@ resource "tls_private_key" "key" {
   rsa_bits  = 4096
 }
 
+resource "random_id" "key_pair_suffix" {
+  byte_length = 3
+}
+
 # Create key pair
 resource "aws_key_pair" "deployer" {
-  key_name   = "deployer-key"
+  key_name   = "${var.key_pair_name_prefix}-${random_id.key_pair_suffix.hex}"
   public_key = tls_private_key.key.public_key_openssh
 }
+
 
 # Store private key locally
 resource "local_file" "private_key" {
@@ -16,24 +21,28 @@ resource "local_file" "private_key" {
   filename        = "${path.module}/deployer-key.pem"
   file_permission = "0600"
 }
-
 # Create EC2 instance with Nginx
 resource "aws_instance" "web" {
-  ami             = var.ec2_ami_id
-  instance_type   = "t2.micro"
-  security_groups = [aws_security_group.web.name]
-  key_name        = aws_key_pair.deployer.key_name
+  ami                    = data.aws_ami.amazon_linux_2.id
+  instance_type          = var.web_instance_type
+  vpc_security_group_ids = [aws_security_group.web.id]
+  key_name               = aws_key_pair.deployer.key_name
 
   user_data = <<-EOF
               #!/bin/bash
-              # Install and configure Nginx
-              yum update -y
-              amazon-linux-extras install -y nginx1
-              systemctl start nginx
-              systemctl enable nginx
+              set -euxo pipefail
 
-              # Create a simple webpage
-              echo "<h1>Hello from Terraform and LocalStack!</h1>" > /usr/share/nginx/html/index.html
+              # Install Docker on Amazon Linux 2
+              yum update -y
+              amazon-linux-extras install -y docker
+              yum install -y docker
+
+              # Start and enable Docker service
+              systemctl enable docker
+              systemctl start docker
+
+              # Allow ec2-user to run Docker commands without sudo
+              usermod -aG docker ec2-user
               EOF
 
   tags = {
